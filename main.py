@@ -149,6 +149,9 @@ def download_csv_by_dataSet(username, password, dataSet, save_path):
 def delete_existing_files():
     downloads_directory = "downloads"
     for file in os.listdir(downloads_directory):
+        if file == ".gitignore":
+            continue  # Skip files with the name ".keep"
+
         file_path = os.path.join(downloads_directory, file)
         try:
             if os.path.isfile(file_path):
