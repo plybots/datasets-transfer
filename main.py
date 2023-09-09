@@ -184,13 +184,13 @@ if __name__ == '__main__':
     password = "Hay@Figure8"
 
     # Read dataset IDs from dataSets.txt and download CSV files for each ID
-    # data_sets_file = "dataSets.txt"
-    # with open(data_sets_file, 'r') as f:
-    #     data_sets = f.read().splitlines()
+    data_sets_file = "dataSets.txt"
+    with open(data_sets_file, 'r') as f:
+        data_sets = f.read().splitlines()
 
     # Delete previously generated CSV and JSON files
     delete_existing_files()
 
-    # for data_set in data_sets:
-    save_path = f"downloads/IBAyM2I5Zfn_dataSet.csv"
-    download_csv_by_dataSet(username, password, 'IBAyM2I5Zfn', save_path)
+    for data_set in data_sets:
+        save_path = f"downloads/IBAyM2I5Zfn_dataSet.csv"
+        download_csv_by_dataSet(username, password, 'IBAyM2I5Zfn', save_path)
