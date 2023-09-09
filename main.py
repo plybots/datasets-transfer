@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import shutil
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -49,8 +50,16 @@ def download_csv_with_authentication(url, username, password, save_path):
 #     except requests.exceptions.RequestException as e:
 #         print(f"An error occurred: {e}")
 
-def update_csv(csv_path):
+
+def update_csv(csv_path, max_file_size_bytes=5 * 1024 * 1024):
     updated_rows = []
+    current_file_size = 0
+    current_file_index = 1
+    dataset_name = os.path.splitext(os.path.basename(csv_path))[0]  # Extract dataset name
+
+    # Create a folder for the dataset if it doesn't exist
+    dataset_folder = os.path.join(os.path.dirname(csv_path), dataset_name).split("_")[0]
+    os.makedirs(dataset_folder, exist_ok=True)
 
     with open(csv_path, 'r') as csv_file:
         csv_reader = csv.DictReader(csv_file)
@@ -59,31 +68,48 @@ def update_csv(csv_path):
     with open(csv_path, 'r') as csv_file:
         csv_reader = csv.DictReader(csv_file)
 
-        # Use tqdm to display progress while updating CSV
         for row in tqdm(csv_reader, total=total_rows, desc="Updating CSV", unit="rows"):
+            # Replace None values with an empty string
+            row = {key: value if value is not None else "" for key, value in row.items()}
+
             category_option_combo = row.get('categoryoptioncombo', '')
             attribute_option_combo = row.get('attributeoptioncombo', '')
 
             if category_option_combo == 'c6PwdArn3fZ' or attribute_option_combo == 'c6PwdArn3fZ':
                 row['categoryoptioncombo'] = 'HllvX50cXC0'
                 row['attributeoptioncombo'] = 'HllvX50cXC0'
-            elif category_option_combo == 'another_value' or attribute_option_combo == 'another_value':
-                row['categoryoptioncombo'] = 'replacement_value'
-                row['attributeoptioncombo'] = 'replacement_value'
 
             updated_rows.append(row)
+            current_file_size += len(",".join(row.values()))
 
-    field_names = updated_rows[0].keys() if updated_rows else []
+            if current_file_size >= max_file_size_bytes:
+                # If the current file size exceeds the specified limit, create a new file
+                create_new_csv(updated_rows, dataset_folder, dataset_name, current_file_index)
+                updated_rows = []
+                current_file_size = 0
+                current_file_index += 1
 
-    temp_csv_path = "temp_updated.csv"
+    # Create the last CSV file if there are remaining rows
+    if updated_rows:
+        create_new_csv(updated_rows, dataset_folder, dataset_name, current_file_index)
 
-    with open(temp_csv_path, 'w', newline='') as csv_file:
+    # Clean up: Delete the old CSV file
+    os.remove(csv_path)
+
+
+def create_new_csv(rows, folder, dataset_name, index):
+    # Define the subfolder where CSV parts will be saved
+    csv_folder = os.path.join(folder, dataset_name, 'csv')
+    os.makedirs(csv_folder, exist_ok=True)  # Ensure the subfolder exists
+
+    field_names = rows[0].keys() if rows else []
+    part_file_name = f"{dataset_name}_part_{index}.csv"
+    part_file_path = os.path.join(csv_folder, part_file_name)
+
+    with open(part_file_path, 'w', newline='') as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=field_names)
         csv_writer.writeheader()
-        csv_writer.writerows(updated_rows)
-
-    os.remove(csv_path)  # Delete the old CSV file
-    os.rename(temp_csv_path, csv_path)  # Rename the updated CSV file
+        csv_writer.writerows(rows)
 
 
 def convert_csv_to_json(csv_path, json_path, data_set_id):
@@ -97,17 +123,7 @@ def convert_csv_to_json(csv_path, json_path, data_set_id):
 
         # Use tqdm to display progress while reading CSV
         for row in tqdm(csv_reader, desc="Converting CSV to JSON", unit="rows"):
-            entry = row
-            if entry.get('categoryoptioncombo') == 'c6PwdArn3fZ' or entry.get(
-                    'attributeoptioncombo') == 'c6PwdArn3fZ':
-                entry['categoryoptioncombo'] = 'HllvX50cXC0'
-                entry['attributeoptioncombo'] = 'HllvX50cXC0'
-            elif entry.get('categoryoptioncombo') == 'c6PwdArn3fZ' or entry.get(
-                    'attributeoptioncombo') == 'c6PwdArn3fZ':
-                entry['categoryoptioncombo'] = 'HllvX50cXC0'
-                entry['attributeoptioncombo'] = 'HllvX50cXC0'
-
-            json_data["dataValues"].append(entry)
+            json_data["dataValues"].append(row)
 
     with open(json_path, 'w') as json_file:
         json.dump(json_data, json_file, indent=4)
@@ -148,15 +164,15 @@ def download_csv_by_dataSet(username, password, dataSet, save_path):
 # Function to delete all CSV and JSON files in the directory
 def delete_existing_files():
     downloads_directory = "downloads"
-    for file in os.listdir(downloads_directory):
-        if file == ".gitignore":
-            continue  # Skip files with the name ".keep"
-
-        file_path = os.path.join(downloads_directory, file)
+    for entry in os.listdir(downloads_directory):
+        file_path = os.path.join(downloads_directory, entry)
         try:
             if os.path.isfile(file_path):
                 os.remove(file_path)
                 print(f"Deleted {file_path}")
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+                print(f"Deleted directory {file_path}")
         except Exception as e:
             print(f"Error deleting {file_path}: {e}")
 
@@ -168,13 +184,13 @@ if __name__ == '__main__':
     password = "Hay@Figure8"
 
     # Read dataset IDs from dataSets.txt and download CSV files for each ID
-    data_sets_file = "dataSets.txt"
-    with open(data_sets_file, 'r') as f:
-        data_sets = f.read().splitlines()
+    # data_sets_file = "dataSets.txt"
+    # with open(data_sets_file, 'r') as f:
+    #     data_sets = f.read().splitlines()
 
     # Delete previously generated CSV and JSON files
     delete_existing_files()
 
-    for data_set in data_sets:
-        save_path = f"downloads/{data_set}_dataSet.csv"
-        download_csv_by_dataSet(username, password, data_set, save_path)
+    # for data_set in data_sets:
+    save_path = f"downloads/IBAyM2I5Zfn_dataSet.csv"
+    download_csv_by_dataSet(username, password, 'IBAyM2I5Zfn', save_path)
